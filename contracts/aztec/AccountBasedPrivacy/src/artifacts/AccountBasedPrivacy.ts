@@ -149,11 +149,14 @@ spent_amounts: {
     /** public_dispatch(selector: field) */
     public_dispatch: ((selector: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
+    /** set_received_amount(address: struct, amount: struct) */
+    set_received_amount: ((address: AztecAddressLike, amount: { x: FieldLike, y: FieldLike, is_infinite: boolean }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** sync_private_state() */
     sync_private_state: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** transfer(recipient: struct, amount: integer) */
-    transfer: ((recipient: AztecAddressLike, amount: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** transfer(recipient: struct, amount: integer, account_nonce_is_zero: boolean, viewing_key: field) */
+    transfer: ((recipient: AztecAddressLike, amount: (bigint | number), account_nonce_is_zero: boolean, viewing_key: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 
   

@@ -7,7 +7,6 @@ describe("accountBasedPrivacy", () => {
     let wallets:AccountWalletWithSecretKey[]
     let PXE:PXE
     beforeAll(async () => {
-        console.log(crypto.getRandomValues(new Uint8Array(new Array(32).fill(0))))
         const PXE_URL = process.env.PXE_URL || 'http://localhost:8080';
         PXE = createPXEClient(PXE_URL) as PXE;
         //@ts-ignore
@@ -18,7 +17,7 @@ describe("accountBasedPrivacy", () => {
         const walletAlice = wallets[1] as AccountWalletWithSecretKey
         const walletBob = wallets[2] as AccountWalletWithSecretKey
         const accountBasedPrivacy = await AccountBasedPrivacyContract.deploy(walletDeployer).send().deployed()
-        const res = accountBasedPrivacy.withWallet(walletAlice).methods.transfer(walletBob.getAddress(),1n).send().wait()
+        const res = await accountBasedPrivacy.withWallet(walletAlice).methods.transfer(walletBob.getAddress(),1n, true, 123n).send().wait()
         console.log({res})
     })
 });

@@ -1,14 +1,14 @@
 {
   "compilerOptions": {
     "rootDir": "./",
-    "target": "es2020",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "Bundler",
     "strict": true,
     "declaration": true,
     "allowJs": true,
     "esModuleInterop": true,
-    "resolveJsonModule": true,
+    "resolveJsonModule": true
   },
   "include": ["./"]
 }

@@ -7,28 +7,28 @@ use aztec::note::note_interface::NoteHash::{compute_nullifier, compute_note_hash
 #[custom_note]
 #[derive(Eq, Serialize)]
 pub struct OneWayNote {
-    secret: Field,
+    viewing_key: Field,
     account_nonce: Field,
     amount_spent: u128,
 }
 
 impl OneWayNote {
-    pub fn new(secret: Field, account_nonce: Field, amount_spent: u128) -> Self {
-        OneWayNote { secret, account_nonce, amount_spent }
+    pub fn new(viewing_key: Field, account_nonce: Field, amount_spent: u128) -> Self {
+        OneWayNote { viewing_key, account_nonce, amount_spent }
     }
 }
 
 impl NoteHash for OneWayNote {
     // just ignoring storage_slot for now
     fn compute_note_hash(self, storage_slot: Field) -> Field {
-        poseidon2_hash([self.secret, self.account_nonce, self.amount_spent as Field])
+        poseidon2_hash([self.viewing_key, self.account_nonce, self.amount_spent as Field])
     }
 
     fn compute_nullifier(self,context: &mut PrivateContext, note_hash_for_nullify: Field) -> Field {
-        poseidon2_hash([self.secret, self.account_nonce])
+        poseidon2_hash([self.viewing_key, self.account_nonce])
     }
 
     unconstrained fn compute_nullifier_unconstrained(self, note_hash_for_nullify: Field) -> Field {
-        poseidon2_hash([self.secret, self.account_nonce])
+        poseidon2_hash([self.viewing_key, self.account_nonce])
     }
 }

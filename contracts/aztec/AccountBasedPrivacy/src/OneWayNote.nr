@@ -25,11 +25,10 @@ impl NoteHash for OneWayNote {
     }
 
     fn compute_nullifier(self,context: &mut PrivateContext, note_hash_for_nullify: Field) -> Field {
-        // - 1 is weird since it will underflow at the first tx. But thats fine since we are not nullifying anything
-        poseidon2_hash([self.secret, self.account_nonce - 1])
+        poseidon2_hash([self.secret, self.account_nonce])
     }
 
     unconstrained fn compute_nullifier_unconstrained(self, note_hash_for_nullify: Field) -> Field {
-        poseidon2_hash([self.secret, self.account_nonce - 1])
+        poseidon2_hash([self.secret, self.account_nonce])
     }
 }

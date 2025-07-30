@@ -12,7 +12,7 @@ pub contract AccountBasedPrivacy {
         traits::{FromField, ToField},
     };
     use aztec::messages::logs::{
-            event::encode_and_encrypt_event,
+            //event::encode_and_encrypt_event,
             note::{encode_and_encrypt_note, encode_and_encrypt_note_unconstrained},
         };
     use aztec::note::{
@@ -26,6 +26,7 @@ pub contract AccountBasedPrivacy {
     use std::hash::pedersen_commitment;
 
     use aztec::{
+        event::event_interface::{emit_event_in_private_log, PrivateLogContent},
         context::{PrivateCallInterface, PrivateContext},
         event::event_interface::EventInterface,
         history::public_storage::{PublicStorageHistoricalRead},
@@ -122,11 +123,19 @@ pub contract AccountBasedPrivacy {
         AccountBasedPrivacy::at(context.this_address()).set_received_amount(recipient, new_recipient_amount_point).enqueue(&mut context);
 
         // emit event so recipient can reconstruct their incoming balance
-        Transfer { sender, recipient, amount, embedded_amount_nonce }.emit(encode_and_encrypt_event(
+        // Transfer { sender, recipient, amount, embedded_amount_nonce }.emit(encode_and_encrypt_event(
+        //     &mut context,
+        //     recipient,
+        //     sender
+        // ));
+        emit_event_in_private_log(
+            Transfer { sender, recipient, amount, embedded_amount_nonce },
             &mut context,
+            sender,
             recipient,
-            sender
-        ));
+            PrivateLogContent.NO_CONSTRAINTS,
+        );
+
         //-------------------------------------------------------------
     }
 

@@ -66,6 +66,7 @@ pub contract AccountBasedPrivacy {
         viewing_key: Field, // get this from PXE somehow, aztec has a bunch of types of keys or what ever
         ) {
         //------ TODO read incoming balance sender ---------------
+        //-------------------------------------------------------------
 
 
         // ---------- track amount spent ------------------------------
@@ -98,6 +99,7 @@ pub contract AccountBasedPrivacy {
             sender,
             sender,
         ));
+        //-------------------------------------------------------------
 
         // ------ track recipient incoming balance ---------------
         // we could have used the shared secret of encode_and_encrypt_event but idk how, so lets just add an extra field with some randomness from the oracle (aka PXE)
@@ -125,6 +127,7 @@ pub contract AccountBasedPrivacy {
             recipient,
             sender
         ));
+        //-------------------------------------------------------------
     }
 
     #[public]

@@ -4,7 +4,7 @@ mod OneWayNote;
 #[aztec]
 pub contract AccountBasedPrivacy {
     use crate::OneWayNote::OneWayNote;
-    use aztec::macros::{functions::{initializer, private, public, utility}, storage::storage};
+    use aztec::macros::{functions::{initializer, private, public, utility, internal}, storage::storage};
     use aztec::prelude::{AztecAddress, Map, PrivateSet, PrivateMutable, PublicMutable};
     use aztec::protocol_types::{
         block_header::BlockHeader,
@@ -101,7 +101,19 @@ pub contract AccountBasedPrivacy {
             sender,
         ));
         //-------------------------------------------------------------
+        _increase_balance(context.inputs, sender,recipient,amount,block_header);
+        //-------------------------------------------------------------
+    }
 
+    // pretty sure this is inefficient, should not use  #[private] or #[internal] even
+    #[private]
+    #[internal]
+    fn _increase_balance(
+            sender: AztecAddress, 
+            recipient: AztecAddress,
+            amount: u128, 
+            block_header: BlockHeader
+        ) {
         // ------ track recipient incoming balance ---------------
         // we could have used the shared secret of encode_and_encrypt_event but idk how, so lets just add an extra field with some randomness from the oracle (aka PXE)
         // Safety: it's in the senders best interest to indeed use real randomness, if not this tx amount is doxxed for the sender and recipient. But total balances aren't
@@ -122,27 +134,22 @@ pub contract AccountBasedPrivacy {
         };
         AccountBasedPrivacy::at(context.this_address()).set_received_amount(recipient, new_recipient_amount_point).enqueue(&mut context);
 
-        // emit event so recipient can reconstruct their incoming balance
-        // Transfer { sender, recipient, amount, embedded_amount_nonce }.emit(encode_and_encrypt_event(
-        //     &mut context,
-        //     recipient,
-        //     sender
-        // ));
+        // TODO do public log instead and encrypt sender, amount, embedded_amount_nonce
         emit_event_in_private_log(
             Transfer { sender, recipient, amount, embedded_amount_nonce },
             &mut context,
             sender,
             recipient,
-            PrivateLogContent.NO_CONSTRAINTS,
+            PrivateLogContent.CONSTRAINED_ENCRYPTION,
         );
-
-        //-------------------------------------------------------------
     }
 
     #[public]
+    #[internal]
     fn set_received_amount(address: AztecAddress, amount: EmbeddedCurvePoint) {
         // TODO check msg_sender is the contract like in ethereum
-        assert(context.msg_sender() == context.this_address(), "only contract can call this function");
+        // #[internal] does the line below
+        //assert(context.msg_sender() == context.this_address(), "only contract can call this function");
         storage.received_amounts.at(address).write(amount);
     }
 

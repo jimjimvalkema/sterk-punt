@@ -134,3 +134,8 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# aztec contracts artifacts
+contracts/aztec/AccountBasedPrivacy/src/artifacts/*
+contracts/aztec/AccountBasedPrivacy/target/*
+contracts/aztec/AccountBasedPrivacy/codegenCache.json

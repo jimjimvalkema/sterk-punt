@@ -11,8 +11,10 @@ pub contract AccountBasedPrivacy {
         abis::function_selector::FunctionSelector,
         traits::{FromField, ToField},
     };
+    use aztec::event::event_interface::{emit_event_in_public_log};
+    use aztec::protocol_types::{storage::map::derive_storage_slot_in_map};
     use aztec::messages::logs::{
-            //event::encode_and_encrypt_event,
+            event::{to_encrypted_private_event_message},
             note::{encode_and_encrypt_note, encode_and_encrypt_note_unconstrained},
         };
     use aztec::note::{
@@ -43,10 +45,11 @@ pub contract AccountBasedPrivacy {
     use std::{meta::derive, ops::{Add, Sub}};
     use dep::aztec::protocol_types::traits::Serialize;
     use dep::aztec::oracle::random::random;
+    use aztec::utils::with_hash::WithHash;
 
     #[storage]
     struct Storage<Context> {
-        received_amounts: Map<AztecAddress, PublicMutable<EmbeddedCurvePoint, Context>, Context>,
+        incoming_balances: Map<AztecAddress, PublicMutable<EmbeddedCurvePoint, Context>, Context>,
         spent_amounts: PrivateSet<OneWayNote, Context>,
     }
 
@@ -59,19 +62,50 @@ pub contract AccountBasedPrivacy {
         embedded_amount_nonce: Field
     }
 
+    #[derive(Serialize)]
+    #[event]
+    struct PrivateIncomingTransfer {
+        amount: u128,
+        embedded_amount_nonce: Field
+    }
+
+    #[derive(Serialize)]
+    #[event]
+    struct PublicIncomingTransfer {
+        recipient: AztecAddress, 
+        encrypted_log: [Field;17], 
+        log_randomness: Field
+    }
+
     #[private]
     fn transfer(
-        recipient: AztecAddress, 
-        amount: u128,
-        account_nonce_is_zero: bool,
-        viewing_key: Field, // get this from PXE somehow, aztec has a bunch of types of keys or what ever
+            recipient: AztecAddress, 
+            amount: u128,
+            account_nonce_is_zero: bool,            // if true we make a note with 0 spent and nullify that, instead of retrieving one from PXE, remember it is nullified so you can only enable this bool once
+            viewing_key: Field,                     // TODO get this from PXE somehow, aztec has a bunch of types of keys or what ever
+            incoming_balance: u128,                 // can be outdated, it only goes up so its okay if outdated
+            sum_embedded_amounts_nonces: Field,     // collect all incoming transfer logs, decrypt them, add the nonces together, thats this number
+            incoming_balance_block_number: u32,     // at this block this in_coming_balance as an pedersen commitment existed onchain for this spenders address 
         ) {
+        let sender: AztecAddress = context.msg_sender();
         //------ TODO read incoming balance sender ---------------
+        // The problem is that there is no nice way to collect log within noir, 
+        // so instead we do it in js and pass incoming_balance, nonce_sum, block_number
         //-------------------------------------------------------------
 
+        let incoming_balances_slot: Field =  aztec::state_vars::storage::Storage::get_storage_slot(storage.incoming_balances);
+        let incoming_balances_slot_at_sender = derive_storage_slot_in_map(incoming_balances_slot, sender);
+        let contract_address: AztecAddress = context.this_address();
+        let historical_incoming_balance_point: EmbeddedCurvePoint = WithHash::<EmbeddedCurvePoint, 3>::historical_public_storage_read(
+            context.get_block_header_at(incoming_balance_block_number),
+            contract_address,
+            incoming_balances_slot_at_sender,
+        );
+
+        let reproduced_balance_point: EmbeddedCurvePoint = pedersen_commitment([incoming_balance as Field, sum_embedded_amounts_nonces]);
+        assert(historical_incoming_balance_point == reproduced_balance_point, "reproduced_balance_point doesn't equal the incoming_balances retrieved from historic block");
 
         // ---------- track amount spent ------------------------------
-        let sender: AztecAddress = context.msg_sender();
         let block_header: BlockHeader = context.get_block_header();
         // TODO make function of this
         let spent_amounts_storage_slot: Field = storage.spent_amounts.storage_slot;
@@ -94,7 +128,7 @@ pub contract AccountBasedPrivacy {
         let nullifier: Field = prev_note.compute_nullifier(&mut context, prev_note_hash);
         context.push_nullifier(nullifier);
 
-        let new_OneWayNote: OneWayNote =  OneWayNote::new(viewing_key, prev_note.account_nonce + 1, prev_note.amount_spent + amount);
+        let new_OneWayNote: OneWayNote = OneWayNote::new(viewing_key, prev_note.account_nonce + 1, prev_note.amount_spent + amount);
         storage.spent_amounts.insert(new_OneWayNote).emit(encode_and_encrypt_note(
             &mut context,
             sender,
@@ -125,32 +159,37 @@ pub contract AccountBasedPrivacy {
         // Should we do something with finding the txs that enqueus to recipients address instead. No sucks too much work
 
         // update recipients incoming balance
-        let recipient_received_amounts_storage_slot: Field = storage.received_amounts.at(recipient).storage_slot;
-        let current_recipient_amount_point: EmbeddedCurvePoint =  historical_public_storage_read(block_header,context.this_address(),recipient_received_amounts_storage_slot );//EmbeddedCurvePoint::generator(); //context.historical_header.public_storage_historical_read( recipient_received_amounts_storage_slot, context.this_address());
+        let recipient_incoming_balances_storage_slot: Field = storage.incoming_balances.at(recipient).storage_slot;
+        let current_recipient_amount_point: EmbeddedCurvePoint =  historical_public_storage_read(block_header,context.this_address(),recipient_incoming_balances_storage_slot );//EmbeddedCurvePoint::generator(); //context.historical_header.public_storage_historical_read( recipient_incoming_balances_storage_slot, context.this_address());
         let new_recipient_amount_point: EmbeddedCurvePoint = if (current_recipient_amount_point.x == 0) { // 0 = its recipients first incoming tx
             embedded_amount
         } else {
             embedded_curve_add(current_recipient_amount_point, embedded_amount)
         };
-        AccountBasedPrivacy::at(context.this_address()).set_received_amount(recipient, new_recipient_amount_point).enqueue(&mut context);
+        let incoming_transfer_event: PrivateIncomingTransfer = PrivateIncomingTransfer { amount, embedded_amount_nonce };
+        // TODO double check this is constrained, if not attacker can brick any address they see
+        let (encrypted_log, log_randomness): ([Field; 17], Field) = to_encrypted_private_event_message(incoming_transfer_event, recipient);
 
-        // TODO do public log instead and encrypt sender, amount, embedded_amount_nonce
+        AccountBasedPrivacy::at(context.this_address()).set_received_amount(recipient, new_recipient_amount_point, encrypted_log, log_randomness).enqueue(&mut context);
+
+        // just for accounting for sender
         emit_event_in_private_log(
             Transfer { sender, recipient, amount, embedded_amount_nonce },
             &mut context,
             sender,
-            recipient,
-            PrivateLogContent.CONSTRAINED_ENCRYPTION,
+            sender,
+            PrivateLogContent.NO_CONSTRAINTS,
         );
     }
 
     #[public]
     #[internal]
-    fn set_received_amount(address: AztecAddress, amount: EmbeddedCurvePoint) {
-        // TODO check msg_sender is the contract like in ethereum
-        // #[internal] does the line below
-        //assert(context.msg_sender() == context.this_address(), "only contract can call this function");
-        storage.received_amounts.at(address).write(amount);
+    fn set_received_amount(address: AztecAddress, amount: EmbeddedCurvePoint, encrypted_log: [Field;17], log_randomness: Field) {
+        emit_event_in_public_log(
+            PublicIncomingTransfer { recipient: address, encrypted_log, log_randomness},
+            &mut context,
+        );
+        storage.incoming_balances.at(address).write(amount);
     }
 
 

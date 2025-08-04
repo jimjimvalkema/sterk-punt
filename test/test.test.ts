@@ -17,7 +17,18 @@ describe("accountBasedPrivacy", () => {
         const walletAlice = wallets[1] as AccountWalletWithSecretKey
         const walletBob = wallets[2] as AccountWalletWithSecretKey
         const accountBasedPrivacy = await AccountBasedPrivacyContract.deploy(walletDeployer).send().deployed()
-        const res = await accountBasedPrivacy.withWallet(walletAlice).methods.transfer(walletBob.getAddress(),1n, true, 123n).send().wait()
+        const incomingBalance = 0n
+        const sum_embedded_amounts_nonces = 0n 
+        const block_number = await PXE.getBlockNumber()
+        const res = await accountBasedPrivacy.withWallet(walletAlice).methods.transfer(
+            walletBob.getAddress(),
+            1n, 
+            true, 
+            123n, 
+            incomingBalance, 
+            sum_embedded_amounts_nonces, 
+            block_number
+        ).send().wait()
         console.log({res})
     })
 });

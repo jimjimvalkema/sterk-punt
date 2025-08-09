@@ -35,48 +35,51 @@ use std::{
 };
 
 
-pub struct SerializableCurvePoint {
-    pub inner: EmbeddedCurvePoint
-}
+// pub struct SerializableCurvePoint {
+//     pub inner: EmbeddedCurvePoint
+// }
 
-impl Serialize<3> for SerializableCurvePoint {
-    fn serialize(self: Self) -> [Field; 3] {
-        [self.inner.x, self.inner.y, self.inner.is_infinite as Field]
-    }
-}
+// impl Serialize<3> for SerializableCurvePoint {
+//     fn serialize(self: Self) -> [Field; 3] {
+//         [self.inner.x, self.inner.y, self.inner.is_infinite as Field]
+//     }
+// }
 
-impl Deserialize<3> for SerializableCurvePoint {
-    fn deserialize(serialized: [Field; 3]) -> Self {
-        SerializableCurvePoint {
-            inner: EmbeddedCurvePoint { 
-                x: serialized[0], 
-                y: serialized[1], 
-                is_infinite: serialized[2] != 0,
-            }
-        }
-    }
-}
+// impl Deserialize<3> for SerializableCurvePoint {
+//     fn deserialize(serialized: [Field; 3]) -> Self {
+//         SerializableCurvePoint {
+//             inner: EmbeddedCurvePoint { 
+//                 x: serialized[0], 
+//                 y: serialized[1], 
+//                 is_infinite: serialized[2] != 0,
+//             }
+//         }
+//     }
+// }
 
-// Packable implementation
-impl Packable<3> for SerializableCurvePoint {
-    fn pack(self: Self) -> [Field; 3] {
-        self.serialize()
-    }
+// // Packable implementation
+// impl Packable<3> for SerializableCurvePoint {
+//     fn pack(self: Self) -> [Field; 3] {
+//         self.serialize()
+//     }
 
-    fn unpack(packed: [Field; 3]) -> Self {
-        Self::deserialize(packed)
-    }
-}
+//     fn unpack(packed: [Field; 3]) -> Self {
+//         Self::deserialize(packed)
+//     }
+// }
 
-impl Eq for SerializableCurvePoint {
-    fn eq(self: Self, other: Self) -> bool {
-        self.inner.eq(other.inner)
-    }
-}
+// impl Eq for SerializableCurvePoint {
+//     fn eq(self: Self, other: Self) -> bool {
+//         self.inner.eq(other.inner)
+//     }
+// }
+
+
+
 
 fn _check_inclusion_received_amount(
     sender: AztecAddress,
-    received_amount_point: SerializableCurvePoint,
+    received_amount_point: EmbeddedCurvePoint,
 
     contract_address: AztecAddress,
     block_number: u32,
@@ -85,44 +88,28 @@ fn _check_inclusion_received_amount(
 ) {
     let received_amounts_slot: Field = get_storage_slot(storage.received_amounts);
     let received_amounts_slot_at_sender = derive_storage_slot_in_map(received_amounts_slot, sender);
-    
-    // This is debug, cam be removed for efficiency
-    let value_hash = block_header.public_storage_historical_read(
-        received_amounts_slot_at_sender,
-        contract_address
-    );
 
-    let value_hash_plus_three = block_header.public_storage_historical_read(
-        received_amounts_slot_at_sender + 3,
-        contract_address
-    );
-    assert(value_hash != 0, "cant read a balance that is not initialize yet!!");
-
-    // let reproduced_value_hash = poseidon2_hash([received_amount_point.inner.x, received_amount_point.inner.y, received_amount_point.inner.is_infinite as Field]);
-    // assert(reproduced_value_hash == value_hash, "reproduced_value_hash doesn't match value_hash retrieved from public_storage_historical_read");
-
-    // let historical_received_amount_point: SerializableCurvePoint = WithHash::<SerializableCurvePoint, 3>::historical_public_storage_read(
-    //     block_header,
-    //     contract_address,
+    // // ---- This is debug, cam be removed for efficiency --------------
+    // let value_hash: Field = block_header.public_storage_historical_read(
     //     received_amounts_slot_at_sender,
+    //     contract_address
     // );
+    // assert(value_hash != 0, "cant read a balance that is not initialize yet! received_amount is likely incorrect or received_amount_block_number is before this account received it's first transaction.");
 
-    let historical_received_amount_point_storage_read = unsafe {
-            oracle::storage::storage_read::<SerializableCurvePoint, 3>(contract_address, received_amounts_slot_at_sender, block_number)
-        };
-    assert(historical_received_amount_point_storage_read == received_amount_point, "received_amount_point doesn't match point from oracle::storage::storage_read");
-    let hint = WithHash::new(historical_received_amount_point_storage_read);
-    // debug_log_format("historical_received_amount_point: {0}",[historical_received_amount_point.inner.x]);
-    debug_log_format("historical_received_amount_point_storage_read: {0}",[historical_received_amount_point_storage_read.inner.x]);
-    debug_log_format("received_amount_point: {0}",[received_amount_point.inner.x]);
-    debug_log_format("hint.hash(): {0}",[hint.get_hash()]);
-    debug_log_format("value_hash: {0}",[value_hash]);
-    debug_log_format("value_hash_plus_three: {0}",[value_hash_plus_three]);
-    // assert(hint.get_hash() == value_hash, "hint.get_hash() doesn't match value_hash");
-    // assert(
-    //     historical_received_amount_point == received_amount_point,
-    //     "received_amount_point doesn't equal the received_amounts retrieved from historic block",
-    // );
+    // //-----------useless check, its unconstrained debug only --- 
+    // let historical_received_amount_point_storage_read = unsafe {
+    //     oracle::storage::storage_read::<EmbeddedCurvePoint, 3>(contract_address, received_amounts_slot_at_sender, block_number)
+    // };
+    // assert(historical_received_amount_point_storage_read == received_amount_point, "received_amount_point doesn't match point from oracle::storage::storage_read");
+    // // ----------------------------------------------------
+    
+    // this breaks but it shouldn't
+    let historical_received_amount_point: EmbeddedCurvePoint = WithHash::<EmbeddedCurvePoint, 3>::historical_public_storage_read(
+        block_header,
+        contract_address,
+        received_amounts_slot_at_sender,
+    );
+    assert(historical_received_amount_point == received_amount_point, "received_amount_point is not in the historical public storage at that specific block number");
 }
 
 
@@ -184,7 +171,7 @@ fn increase_balance(
 
     AccountBasedPrivacy::at(contract_address).add_to_received_amount_amount(
         recipient,
-        SerializableCurvePoint {inner:amount_point} ,
+        amount_point ,
     ).enqueue(context);
 }
 
@@ -212,7 +199,7 @@ pub contract AccountBasedPrivacy {
         _check_inclusion_received_amount,
         _retrieve_prev_account_based_note,
         increase_balance,
-        SerializableCurvePoint,
+        // SerializableCurvePoint,
     };
     use std::{
         embedded_curve_ops::{
@@ -225,7 +212,7 @@ pub contract AccountBasedPrivacy {
 
     #[storage]
     pub struct Storage<Context> {
-        pub received_amounts: Map<AztecAddress, PublicMutable<SerializableCurvePoint, Context>, Context>,
+        pub received_amounts: Map<AztecAddress, PublicMutable<EmbeddedCurvePoint, Context>, Context>,
         pub spent_amounts: PrivateSet<AccountBasedNote, Context>,
     }
 
@@ -243,7 +230,7 @@ pub contract AccountBasedPrivacy {
     }
 
     #[utility]
-    unconstrained fn get_received_amount(address: AztecAddress) -> SerializableCurvePoint {
+    unconstrained fn get_received_amount(address: AztecAddress) -> EmbeddedCurvePoint {
         let point = storage.received_amounts.at(address).read();
         point
     }
@@ -274,6 +261,8 @@ pub contract AccountBasedPrivacy {
                                                     // blinding_nonce_point = pedersen([0,field_limit]) * sum_nonce / field_limit +  pedersen([0,sum_nonce % field_limit])
         received_amount_block_number: u32,          // at this block this in_coming_balance as an pedersen commitment existed onchain for this spenders address 
     ) {
+        assert(received_amount != 0, "received_amount cant be zero"); // make debugging easier
+
         // context variables
         let sender: AztecAddress = context.msg_sender();
         let contract_address: AztecAddress = context.this_address();
@@ -284,7 +273,7 @@ pub contract AccountBasedPrivacy {
         let received_amount_point_blinded_point: EmbeddedCurvePoint = blinding_nonce_point.add(received_amount_point);
         _check_inclusion_received_amount(
             sender,
-            SerializableCurvePoint {inner:received_amount_point_blinded_point},
+            received_amount_point_blinded_point,
             contract_address,
             received_amount_block_number,
             block_header,
@@ -337,18 +326,18 @@ pub contract AccountBasedPrivacy {
     #[internal]
     fn add_to_received_amount_amount(
         recipient: AztecAddress,
-        added_amount_point: SerializableCurvePoint,
+        added_amount_point: EmbeddedCurvePoint,
     ) {
         emit_event_in_public_log(
             PublicIncomingTransfer { recipient},
             &mut context,
         );
-        let current_point: SerializableCurvePoint = storage.received_amounts.at(recipient).read();
-        if (current_point.inner.x == 0) {
+        let current_point: EmbeddedCurvePoint = storage.received_amounts.at(recipient).read();
+        if (current_point.x == 0) {
             storage.received_amounts.at(recipient).write(added_amount_point);
         } else {
-            let new_point: EmbeddedCurvePoint = embedded_curve_add(current_point.inner, added_amount_point.inner);
-            storage.received_amounts.at(recipient).write(SerializableCurvePoint{inner:new_point});
+            let new_point: EmbeddedCurvePoint = embedded_curve_add(current_point, added_amount_point);
+            storage.received_amounts.at(recipient).write(new_point);
         };
     }
 }

@@ -21,6 +21,7 @@ async function pedersenOnInt(input:bigint[]) {
 
 
 async function createBlindingPoint(blindingNonce: bigint) {
+    console.log({blindingNonce})
     if (blindingNonce < Fr.MAX_FIELD_VALUE.toBigInt()) {
         return await pedersenOnInt([0n,blindingNonce])
     } else {
@@ -53,6 +54,7 @@ describe("accountBasedPrivacy", () => {
         //@ts-ignore
         wallets = await getDeployedTestAccountsWallets(PXE) as AccountWalletWithSecretKey[]
     })
+
     it("should spend", async () => {
         const walletDeployer = wallets[0] as AccountWalletWithSecretKey
         const walletAlice = wallets[1] as AccountWalletWithSecretKey
@@ -70,7 +72,6 @@ describe("accountBasedPrivacy", () => {
         // TODO make issue getPublicEvents need to filter per contract address like getPrivateEvents does
         const publicEvents = await PXE.getPublicEvents(AccountBasedPrivacyContract.events.PublicIncomingTransfer, 0, 100000);
         const aliceReceivedAmountBlockNumber = await PXE.getBlockNumber()
-        //console.log({publicLenght: publicEvents.length, privateLenght: privateEvents.length})
         // because getPublicEvents doesn't filter on the contract address. Work around here assumes that the contract used to scan events is the most recent contract deployed
         const publicEventsOverShoot = publicEvents.length - privateEvents.length
         const combinedEvents = privateEvents.map((v, i) => {
@@ -85,21 +86,20 @@ describe("accountBasedPrivacy", () => {
 
         const aliceReceivedAmountData = {receivedAmount: 0n, receivedAmountBlindingNonce: 0n }
         for (const {amount, amount_blinding_nonce} of combinedEventsAlice as any) {
-            aliceReceivedAmountData.receivedAmount += amount//% 
+            aliceReceivedAmountData.receivedAmount += amount
             aliceReceivedAmountData.receivedAmountBlindingNonce += amount_blinding_nonce
         }
-        // aliceReceivedAmountData.receivedAmount = aliceReceivedAmountData.receivedAmount % Fr.MODULUS
-        // aliceReceivedAmountData.receivedAmountBlindingNonce = aliceReceivedAmountData.receivedAmountBlindingNonce % Fr.MODULUS
+
 
         console.log({ aliceReceivedAmountData: aliceReceivedAmountData })
         console.log({combinedEventsAlice})
-        const blindingPoint = await createBlindingPoint(aliceReceivedAmountData.receivedAmountBlindingNonce)
-        const amountPoint = await pedersenOnInt([aliceReceivedAmountData.receivedAmount, 0n])
+        const blindingPoint = await createBlindingPoint(aliceReceivedAmountData.receivedAmountBlindingNonce)//new Point(Fr.fromHexString("0x1fbe6c4566450674fe3963d1ab2b55bdf6e372abd0cabe36e0b24861e6cf8c6d"),Fr.fromHexString("0x1a5322c42fe9343da84394bad78e58254656e069b8a968b8986f488b0f9b3a63"), false)//await createBlindingPoint(aliceReceivedAmountData.receivedAmountBlindingNonce)
+        const amountPoint = await pedersenOnInt([aliceReceivedAmountData.receivedAmount, 0n]) //new Point(Fr.fromHexString("0x1fbe6c4566450674fe3963d1ab2b55bdf6e372abd0cabe36e0b24861e6cf8c6d"),Fr.fromHexString("0x1a5322c42fe9343da84394bad78e58254656e069b8a968b8986f488b0f9b3a63"), false)// await pedersenOnInt([aliceReceivedAmountData.receivedAmount, 0n])
         const grumpkin = new Grumpkin()
         const receivedAmountPointBlinded = await grumpkin.add(amountPoint, blindingPoint)
         console.log({ pedersenInJs_x: ethers.toBeHex(receivedAmountPointBlinded.x.toBigInt()) })
         const current_point =  await accountBasedPrivacy.methods.get_received_amount(walletAlice.getAddress()).simulate()
-        console.log({current_point_x_from_chain: ethers.toBeHex(current_point.inner.x)} )
+        console.log({current_point_x_from_chain: ethers.toBeHex(current_point.x)} )
         const blindingPointFormatted = {
                 x: blindingPoint.x.toBigInt(),
                 y:  blindingPoint.y.toBigInt(),

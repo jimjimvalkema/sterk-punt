@@ -30,86 +30,27 @@ use dep::aztec::oracle::debug_log::{ debug_log_format };
 
 
 use std::{
-    embedded_curve_ops::{EmbeddedCurvePoint},
+    embedded_curve_ops::{Hash, EmbeddedCurvePoint},
     hash::pedersen_commitment,
 };
-
-
-// pub struct SerializableCurvePoint {
-//     pub inner: EmbeddedCurvePoint
-// }
-
-// impl Serialize<3> for SerializableCurvePoint {
-//     fn serialize(self: Self) -> [Field; 3] {
-//         [self.inner.x, self.inner.y, self.inner.is_infinite as Field]
-//     }
-// }
-
-// impl Deserialize<3> for SerializableCurvePoint {
-//     fn deserialize(serialized: [Field; 3]) -> Self {
-//         SerializableCurvePoint {
-//             inner: EmbeddedCurvePoint { 
-//                 x: serialized[0], 
-//                 y: serialized[1], 
-//                 is_infinite: serialized[2] != 0,
-//             }
-//         }
-//     }
-// }
-
-// // Packable implementation
-// impl Packable<3> for SerializableCurvePoint {
-//     fn pack(self: Self) -> [Field; 3] {
-//         self.serialize()
-//     }
-
-//     fn unpack(packed: [Field; 3]) -> Self {
-//         Self::deserialize(packed)
-//     }
-// }
-
-// impl Eq for SerializableCurvePoint {
-//     fn eq(self: Self, other: Self) -> bool {
-//         self.inner.eq(other.inner)
-//     }
-// }
-
-
-
 
 fn _check_inclusion_received_amount(
     sender: AztecAddress,
     received_amount_point: EmbeddedCurvePoint,
 
     contract_address: AztecAddress,
-    block_number: u32,
     block_header: BlockHeader,
     storage: AccountBasedPrivacy::Storage<&mut PrivateContext>,
 ) {
     let received_amounts_slot: Field = get_storage_slot(storage.received_amounts);
     let received_amounts_slot_at_sender = derive_storage_slot_in_map(received_amounts_slot, sender);
-
-    // // ---- This is debug, cam be removed for efficiency --------------
-    // let value_hash: Field = block_header.public_storage_historical_read(
-    //     received_amounts_slot_at_sender,
-    //     contract_address
-    // );
-    // assert(value_hash != 0, "cant read a balance that is not initialize yet! received_amount is likely incorrect or received_amount_block_number is before this account received it's first transaction.");
-
-    // //-----------useless check, its unconstrained debug only --- 
-    // let historical_received_amount_point_storage_read = unsafe {
-    //     oracle::storage::storage_read::<EmbeddedCurvePoint, 3>(contract_address, received_amounts_slot_at_sender, block_number)
-    // };
-    // assert(historical_received_amount_point_storage_read == received_amount_point, "received_amount_point doesn't match point from oracle::storage::storage_read");
-    // // ----------------------------------------------------
     
-    // this breaks but it shouldn't
-    let historical_received_amount_point: EmbeddedCurvePoint = WithHash::<EmbeddedCurvePoint, 3>::historical_public_storage_read(
-        block_header,
-        contract_address,
+    let value_hash: Field = block_header.public_storage_historical_read(
         received_amounts_slot_at_sender,
+        contract_address
     );
-    assert(historical_received_amount_point == received_amount_point, "received_amount_point is not in the historical public storage at that specific block number");
+    assert(value_hash != 0, "cant read a balance that is not initialize yet! received_amount is likely incorrect or received_amount_block_number is before this account received it's first transaction.");
+    assert(value_hash == received_amount_point.x, "received_amount_point.x doesn't match value hash");
 }
 
 
@@ -275,7 +216,6 @@ pub contract AccountBasedPrivacy {
             sender,
             received_amount_point_blinded_point,
             contract_address,
-            received_amount_block_number,
             block_header,
             storage,
         );

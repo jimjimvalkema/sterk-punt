@@ -21,27 +21,7 @@ async function pedersenOnInt(input:bigint[]) {
 
 
 async function createBlindingPoint(blindingNonce: bigint) {
-    console.log({blindingNonce})
-    if (blindingNonce < Fr.MAX_FIELD_VALUE.toBigInt()) {
-        return await pedersenOnInt([0n,blindingNonce])
-    } else {
-        const timesExceededLimit = blindingNonce / Fr.MAX_FIELD_VALUE.toBigInt()
-        const exceededLimitScalar = new GrumpkinScalar(timesExceededLimit)
-        const grumpkin = new Grumpkin()
-        const maxBlindingPointMul = await grumpkin.mul(MAX_FIELD_BLINDING_POINT, exceededLimitScalar)
-        const remainder = blindingNonce % Fr.MAX_FIELD_VALUE.toBigInt()
-        const remainderPoint = await pedersenOnInt([0n, remainder])
-        const blindingPoint = await grumpkin.add(maxBlindingPointMul,remainderPoint)
-        console.log(
-        "debug",    
-        {
-            timesExceededLimit,
-            remainder,
-            blindingNonce,
-            reproducedBlindingNonce: timesExceededLimit*Fr.MAX_FIELD_VALUE.toBigInt() + remainder
-        })
-        return blindingPoint
-    }
+    return await pedersenOnInt([0n, blindingNonce % GrumpkinScalar.MODULUS])
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

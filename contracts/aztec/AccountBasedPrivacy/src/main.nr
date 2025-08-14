@@ -23,6 +23,7 @@ use dep::aztec::{
     state_vars::storage::Storage::get_storage_slot,
     utils::{
         with_hash::{oracle},
+        with_hash::WithHash::{new},
         with_hash::WithHash,
     },
 };
@@ -44,14 +45,14 @@ fn _check_inclusion_received_amount(
 ) {
     let received_amounts_slot: Field = get_storage_slot(storage.received_amounts);
     let received_amounts_slot_at_sender = derive_storage_slot_in_map(received_amounts_slot, sender);
-    
-    let value_hash: Field = block_header.public_storage_historical_read(
+    let historical_received_amount_point: EmbeddedCurvePoint = WithHash::<EmbeddedCurvePoint, 3>::historical_public_storage_read(
+        block_header,
+        contract_address,
         received_amounts_slot_at_sender,
-        contract_address
     );
-    assert(value_hash != 0, "cant read a balance that is not initialize yet! received_amount is likely incorrect or received_amount_block_number is before this account received it's first transaction.");
-    assert(value_hash == received_amount_point.x, "received_amount_point.x doesn't match value hash");
-}
+    assert_eq(historical_received_amount_point, received_amount_point, "retrieved historical_received_amount_point doesn't match provided received_amount_point");
+
+}   
 
 
 fn _retrieve_prev_account_based_note(
@@ -134,6 +135,12 @@ pub contract AccountBasedPrivacy {
             block_header::BlockHeader,
             traits::Serialize,
         },
+        utils::{
+            with_hash::{oracle},
+            with_hash::{WithHash},
+            with_hash::WithHash::{new},
+
+        },
     };
     use crate::{
         accountBasedNote::AccountBasedNote,
@@ -153,7 +160,7 @@ pub contract AccountBasedPrivacy {
 
     #[storage]
     pub struct Storage<Context> {
-        pub received_amounts: Map<AztecAddress, PublicMutable<EmbeddedCurvePoint, Context>, Context>,
+        pub received_amounts: Map<AztecAddress, PublicMutable<WithHash<EmbeddedCurvePoint, 3>, Context>, Context>,
         pub spent_amounts: PrivateSet<AccountBasedNote, Context>,
     }
 
@@ -172,8 +179,8 @@ pub contract AccountBasedPrivacy {
 
     #[utility]
     unconstrained fn get_received_amount(address: AztecAddress) -> EmbeddedCurvePoint {
-        let point = storage.received_amounts.at(address).read();
-        point
+        let point: WithHash<EmbeddedCurvePoint, 3> = storage.received_amounts.at(address).read();
+        point.get_value()
     }
 
     #[private]
@@ -210,6 +217,7 @@ pub contract AccountBasedPrivacy {
         let block_header: BlockHeader = context.get_block_header_at(received_amount_block_number);
 
         // verify inclusion provided received balance
+        // TODO handle overflows of received_amount. external party can grief their account? since overflowing will cause amount to be = (a + b) % n (n group order).
         let received_amount_point: EmbeddedCurvePoint = pedersen_commitment([received_amount as Field, 0]);
         let received_amount_point_blinded_point: EmbeddedCurvePoint = blinding_nonce_point.add(received_amount_point);
         _check_inclusion_received_amount(
@@ -272,13 +280,15 @@ pub contract AccountBasedPrivacy {
             PublicIncomingTransfer { recipient},
             &mut context,
         );
-        let current_point: EmbeddedCurvePoint = storage.received_amounts.at(recipient).read();
-        if (current_point.x == 0) {
-            storage.received_amounts.at(recipient).write(added_amount_point);
+        let current_point: EmbeddedCurvePoint = storage.received_amounts.at(recipient).read().get_value();
+
+        let new_point: EmbeddedCurvePoint = if (current_point.x == 0) {
+            added_amount_point
         } else {
-            let new_point: EmbeddedCurvePoint = embedded_curve_add(current_point, added_amount_point);
-            storage.received_amounts.at(recipient).write(new_point);
+            embedded_curve_add(current_point, added_amount_point)
         };
-    }
+        let new_point_with_hash = WithHash::new(new_point);
+        storage.received_amounts.at(recipient).write(new_point_with_hash);
+    }   
 }
 

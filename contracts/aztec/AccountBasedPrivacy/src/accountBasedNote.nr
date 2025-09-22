@@ -1,13 +1,14 @@
 use dep::aztec::{
     context::PrivateContext,
     macros::notes::custom_note,
-    note::note_interface::NoteHash,
+    note::note_interface::{NoteHash, NoteType},
     protocol_types::{
         hash::poseidon2_hash,
         traits::Serialize,
+        traits::Packable,
     },
 };
-
+#[derive(Packable)] 
 #[custom_note]
 #[derive(Eq, Serialize)]
 pub struct AccountBasedNote {
@@ -21,6 +22,14 @@ impl AccountBasedNote {
         AccountBasedNote { viewing_key, account_nonce, amount_spent }
     }
 }
+
+
+// impl NoteType for AccountBasedNote {
+//     fn get_id() -> Field {
+//         // Pick a unique 7-bit integer for your note type, e.g., 77 <- chatGpt idk sound weird don't trust it
+//         34
+//     }
+// }
 
 impl NoteHash for AccountBasedNote {
     // just ignoring storage_slot for now

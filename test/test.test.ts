@@ -50,11 +50,13 @@ describe("accountBasedPrivacy", () => {
             await accountBasedPrivacy.withWallet(walletAlice).methods.mint(
                 walletAlice.getAddress(),
                 BigInt(amount+100),
-            ).send({from:walletAlice.getAddress()}).wait()
+            ).send({from:walletAlice.getAddress()}).wait({ timeout: 60 * 60 * 12 }); //TODO bug when prover enabled, timeout is exceeded, even though it error after 60s instead of 12h!!!
         }
-        const privateEvents = await PXE.getPrivateEvents(accountBasedPrivacy.address, AccountBasedPrivacyContract.events.PrivateIncomingTransfer, 0, 100000, [walletAlice.getAddress()])
+        // @TODO bug no events??
+        const privateEvents = await walletAlice.getPrivateEvents(accountBasedPrivacy.address, AccountBasedPrivacyContract.events.PrivateIncomingTransfer, 0, 100000000000, [walletAlice.getAddress()])
         // TODO make issue getPublicEvents need to filter per contract address like getPrivateEvents does
-        const publicEvents = await PXE.getPublicEvents(AccountBasedPrivacyContract.events.PublicIncomingTransfer, 0, 100000);
+        const publicEvents = await walletAlice.getPublicEvents(AccountBasedPrivacyContract.events.PublicIncomingTransfer, 0, 100000000000);
+        console.log({publicEvents, privateEvents})
         const aliceReceivedAmountBlockNumber = await PXE.getBlockNumber()
         // because getPublicEvents doesn't filter on the contract address. Work around here assumes that the contract used to scan events is the most recent contract deployed
         const publicEventsOverShoot = publicEvents.length - privateEvents.length
@@ -106,7 +108,7 @@ describe("accountBasedPrivacy", () => {
             aliceReceivedAmountData.receivedAmount,
             blindingPointFormatted,
             aliceReceivedAmountBlockNumber
-        ).send({from:walletBob.getAddress()}).wait()
+        ).send({from:walletBob.getAddress()}).wait({ timeout: 60 * 60 * 12 });
 
         console.log({ tx })
     })

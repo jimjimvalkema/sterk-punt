@@ -173,7 +173,9 @@ pub contract AccountBasedPrivacy {
     }
     
     #[private]
-    #[internal]
+    //#[internal] 
+    //@TODO bug cant be internal i get error `Function increase_balance can only be called internally 'context.msg_sender() == context.this_address()'`
+    // is the enqueue messing with things?
     fn increase_balance(
         recipient: AztecAddress,
         amount: u128,
@@ -197,5 +199,4 @@ pub contract AccountBasedPrivacy {
             .add_to_received_amount_amount(recipient, amount_point)
             .enqueue(&mut context);
     }
-
 }

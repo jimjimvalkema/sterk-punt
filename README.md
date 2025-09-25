@@ -2,7 +2,7 @@
 
 
 ```shell
-VERSION=2.0.3 aztec start --sandbox
+VERSION=2.0.3 aztec start --sandbox --rollup-version 1714840162
 ```
 
 compile

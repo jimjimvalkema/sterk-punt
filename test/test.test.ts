@@ -1,10 +1,14 @@
 import { AztecAddress, Contract, createPXEClient, waitForPXE, Fr, GrumpkinScalar, type PXE, AccountWalletWithSecretKey, AztecAddressLike, FieldLike } from '@aztec/aztec.js';
+//@ts-ignore TODO types gone??
 import { getDeployedTestAccountsWallets } from '@aztec/accounts/testing';
 import { AccountBasedPrivacyContract } from '../contracts/aztec/AccountBasedPrivacy/src/artifacts/AccountBasedPrivacy';
+//@ts-ignore
 import { pedersenCommit } from '@aztec/foundation/crypto'
 import { toBufferBE , toBigIntBE} from 'bigint-buffer';
 import { ethers } from 'ethers';
+//@ts-ignore
 import { Grumpkin } from '@aztec/foundation/crypto';
+//@ts-ignore
 import { Point } from '@aztec/foundation/fields';
 
 const MAX_FIELD_BLINDING_POINT = await pedersenOnInt([0n, Fr.MAX_FIELD_VALUE.toBigInt()])
@@ -40,13 +44,13 @@ describe("accountBasedPrivacy", () => {
         const walletAlice = wallets[1] as AccountWalletWithSecretKey
         const viewingKeyAlice = 1234n
         const walletBob = wallets[2] as AccountWalletWithSecretKey
-        const accountBasedPrivacy = await AccountBasedPrivacyContract.deploy(walletDeployer).send().deployed()
+        const accountBasedPrivacy = await AccountBasedPrivacyContract.deploy(walletDeployer).send({from:walletDeployer.getAddress()}).deployed()
 
         for (let amount = 0; amount < 10; amount++) {
             await accountBasedPrivacy.withWallet(walletAlice).methods.mint(
                 walletAlice.getAddress(),
                 BigInt(amount+100),
-            ).send().wait()
+            ).send({from:walletAlice.getAddress()}).wait()
         }
         const privateEvents = await PXE.getPrivateEvents(accountBasedPrivacy.address, AccountBasedPrivacyContract.events.PrivateIncomingTransfer, 0, 100000, [walletAlice.getAddress()])
         // TODO make issue getPublicEvents need to filter per contract address like getPrivateEvents does
@@ -78,7 +82,7 @@ describe("accountBasedPrivacy", () => {
         const grumpkin = new Grumpkin()
         const receivedAmountPointBlinded = await grumpkin.add(amountPoint, blindingPoint)
         console.log({ pedersenInJs_x: ethers.toBeHex(receivedAmountPointBlinded.x.toBigInt()) })
-        const current_point =  await accountBasedPrivacy.methods.get_received_amount(walletAlice.getAddress()).simulate()
+        const current_point =  await accountBasedPrivacy.methods.get_received_amount(walletAlice.getAddress()).simulate({from:walletBob.getAddress()})
         console.log({current_point_x_from_chain: ethers.toBeHex(current_point.x)} )
         const blindingPointFormatted = {
                 x: blindingPoint.x.toBigInt(),
@@ -102,7 +106,7 @@ describe("accountBasedPrivacy", () => {
             aliceReceivedAmountData.receivedAmount,
             blindingPointFormatted,
             aliceReceivedAmountBlockNumber
-        ).send().wait()
+        ).send({from:walletBob.getAddress()}).wait()
 
         console.log({ tx })
     })
